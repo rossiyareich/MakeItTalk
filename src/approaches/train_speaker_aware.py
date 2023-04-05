@@ -26,14 +26,16 @@ from scipy.signal import savgol_filter
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+DEBUG = False
+
 class Speaker_aware_branch():
 
     def __init__(self, opt_parser):
-        print('Run on device:', device)
+        if DEBUG: print('Run on device:', device)
 
         # Step 1 : load opt_parser
         for key in vars(opt_parser).keys():
-            print(key, ':', vars(opt_parser)[key])
+            if DEBUG: print(key, ':', vars(opt_parser)[key])
         self.opt_parser = opt_parser
         self.dump_dir = opt_parser.dump_dir
         self.std_face_id = np.loadtxt('dataset/utils/STD_FACE_LANDMARKS.txt')
@@ -53,7 +55,7 @@ class Speaker_aware_branch():
                                                                 shuffle=False, num_workers=0,
                                                                 collate_fn=self.train_data.my_collate_in_segments)
 
-            print('Train num videos: {}'.format(len(self.train_data)))
+            if DEBUG: ('Train num videos: {}'.format(len(self.train_data)))
             self.eval_data = Speaker_aware_branch_Dataset(dump_dir=self.dump_dir, dump_name=opt_parser.dump_file_name,
                                                    num_window_frames=opt_parser.num_window_frames,
                                                    num_window_step=opt_parser.num_window_step,
@@ -61,7 +63,7 @@ class Speaker_aware_branch():
             self.eval_dataloader = torch.utils.data.DataLoader(self.eval_data, batch_size=opt_parser.batch_size,
                                                                shuffle=False, num_workers=0,
                                                                collate_fn=self.eval_data.my_collate_in_segments)
-            print('EVAL num videos: {}'.format(len(self.eval_data)))
+            if DEBUG: ('EVAL num videos: {}'.format(len(self.eval_data)))
         else:
             self.eval_data = Speaker_aware_branch_Dataset(dump_dir='examples/dump',
                                                     dump_name='random',
@@ -76,7 +78,7 @@ class Speaker_aware_branch():
             self.eval_dataloader = torch.utils.data.DataLoader(self.eval_data, batch_size=1,
                                                                shuffle=False, num_workers=0,
                                                                collate_fn=self.eval_data.my_collate_in_segments)
-            print('EVAL num videos: {}'.format(len(self.eval_data)))
+            if DEBUG: ('EVAL num videos: {}'.format(len(self.eval_data)))
         # exit(0)
 
         # Step 3: Load model
@@ -90,7 +92,7 @@ class Speaker_aware_branch():
         for p in self.G.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
-        print('G: Running on {}, total num params = {:.2f}M'.format(device, get_n_params(self.G)/1.0e6))
+        if DEBUG: ('G: Running on {}, total num params = {:.2f}M'.format(device, get_n_params(self.G)/1.0e6))
 
         # self.D_L = Audio2landmark_pos_DL()
         # self.D_L.apply(weight_init)
@@ -111,7 +113,7 @@ class Speaker_aware_branch():
                                if 'bilstm' in k or 'fc_prior' in k}
             model_dict.update(pretrained_dict)
             self.G.load_state_dict(model_dict)
-            print('======== LOAD INIT POS MODEL {} ========='.format(opt_parser.init_content_encoder))
+            if DEBUG: ('======== LOAD INIT POS MODEL {} ========='.format(opt_parser.init_content_encoder))
 
         if (opt_parser.load_a2l_G_name.split('/')[-1] != ''):
             model_dict = self.G.state_dict()
@@ -121,7 +123,7 @@ class Speaker_aware_branch():
             model_dict.update(pretrained_dict)
 
             self.G.load_state_dict(model_dict)
-            print('======== LOAD PRETRAINED SPEAKER AWARE MODEL {} ========='.format(opt_parser.load_a2l_G_name))
+            if DEBUG: ('======== LOAD PRETRAINED SPEAKER AWARE MODEL {} ========='.format(opt_parser.load_a2l_G_name))
 
         self.G.to(device)
 
@@ -130,7 +132,7 @@ class Speaker_aware_branch():
                                         bidirectional=False, drop_out=0.)
         ckpt = torch.load(opt_parser.load_a2l_C_name)
         self.C.load_state_dict(ckpt['model_g_face_id'])
-        print('======== LOAD PRETRAINED FACE ID MODEL {} ========='.format(opt_parser.load_a2l_C_name))
+        if DEBUG: print('======== LOAD PRETRAINED FACE ID MODEL {} ========='.format(opt_parser.load_a2l_C_name))
         self.C.to(device)
 
         self.loss_mse = torch.nn.MSELoss()
@@ -162,7 +164,7 @@ class Speaker_aware_branch():
                     inputs_fl, inputs_au, inputs_emb, _, _, _ = batch
                     self.test_embs[video_name.split('_x_')[1]] = inputs_emb[0]
 
-        print(self.test_embs.keys(), len(self.test_embs.keys()))
+        if DEBUG: print(self.test_embs.keys(), len(self.test_embs.keys()))
         self.test_embs_dic = {key: i for i, key in enumerate(self.test_embs.keys())}
 
         if (opt_parser.write):
@@ -358,7 +360,7 @@ class Speaker_aware_branch():
         # random_clip_index = np.random.randint(0, len(dataloader)-1, 4)
         # random_clip_index = np.random.randint(0, 64, 4)
         random_clip_index = list(range(len(dataloader)))
-        print('random_clip_index', random_clip_index)
+        if DEBUG: print('random_clip_index', random_clip_index)
         # Step 2: train for each batch
         for i, batch in enumerate(dataloader):
 
@@ -485,23 +487,23 @@ class Speaker_aware_branch():
 
                 if (True):
                     if (self.opt_parser.show_animation):
-                        print('show animation ....')
+                        if DEBUG: print('show animation ....')
                         save_fls_av(fls_pred_pos_list, 'pred', ifsmooth=True)
                         save_fls_av(std_fls_list, 'std', ifsmooth=False)
 
             if (self.opt_parser.verbose <= 1):
-                print('{} Epoch: #{} batch #{}/{}'.format(status, epoch, i, len(dataloader)), end=': ')
+                if DEBUG: print('{} Epoch: #{} batch #{}/{}'.format(status, epoch, i, len(dataloader)), end=': ')
                 for key in log_loss.keys():
-                    print(key, '{:.5f}'.format(log_loss[key].per('batch')), end=', ')
-                print('')
+                    if DEBUG: print(key, '{:.5f}'.format(log_loss[key].per('batch')), end=', ')
+                if DEBUG: print('')
             self.__tensorboard_write__(status, log_loss, 'batch')
 
         if (self.opt_parser.verbose <= 2):
-            print('==========================================================')
-            print('{} Epoch: #{}'.format(status, epoch), end=':')
+            if DEBUG: print('==========================================================')
+            if DEBUG: print('{} Epoch: #{}'.format(status, epoch), end=':')
             for key in log_loss.keys():
-                print(key, '{:.4f}'.format(log_loss[key].per('epoch')), end=', ')
-            print('Epoch time usage: {:.2f} sec\n==========================================================\n'.format(time.time() - st_epoch))
+                if DEBUG: print(key, '{:.4f}'.format(log_loss[key].per('epoch')), end=', ')
+            if DEBUG: print('Epoch time usage: {:.2f} sec\n==========================================================\n'.format(time.time() - st_epoch))
         self.__save_model__(save_type='last_epoch', epoch=epoch)
         if(epoch % self.opt_parser.ckpt_epoch_freq == 0):
             self.__save_model__(save_type='e_{}'.format(epoch), epoch=epoch)
@@ -659,7 +661,7 @@ class Speaker_aware_branch():
         """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
         lr = self.opt_parser.lr * (0.3 ** (np.max((0, epoch + 0)) // 50))
         lr = np.max((lr, 1e-5))
-        print('###### ==== > Adjust learning rate to ', lr)
+        if DEBUG: print('###### ==== > Adjust learning rate to ', lr)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
             # print('lr:', param_group['lr'])

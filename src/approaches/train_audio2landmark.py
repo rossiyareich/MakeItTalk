@@ -19,6 +19,7 @@ import pickle
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+DEBUG = False
 
 class Audio2landmark_model():
 
@@ -26,7 +27,7 @@ class Audio2landmark_model():
         '''
         Init model with opt_parser
         '''
-        print('Run on device:', device)
+        if DEBUG: print('Run on device:', device)
 
         # Step 1 : load opt_parser
         self.opt_parser = opt_parser
@@ -44,7 +45,7 @@ class Audio2landmark_model():
         self.eval_dataloader = torch.utils.data.DataLoader(self.eval_data, batch_size=1,
                                                            shuffle=False, num_workers=0,
                                                            collate_fn=self.eval_data.my_collate_in_segments)
-        print('EVAL num videos: {}'.format(len(self.eval_data)))
+        if DEBUG: print('EVAL num videos: {}'.format(len(self.eval_data)))
 
         # Step 3: Load model
         self.G = Audio2landmark_pos(drop_out=0.5,
@@ -52,7 +53,7 @@ class Audio2landmark_model():
                                  c_enc_hidden_size=256,
                                  transformer_d_model=32, N=2, heads=2,
                                  z_size=128, audio_dim=256)
-        print('G: Running on {}, total num params = {:.2f}M'.format(device, get_n_params(self.G)/1.0e6))
+        if DEBUG: print('G: Running on {}, total num params = {:.2f}M'.format(device, get_n_params(self.G)/1.0e6))
 
         model_dict = self.G.state_dict()
         ckpt = torch.load(opt_parser.load_a2l_G_name)
@@ -60,7 +61,7 @@ class Audio2landmark_model():
         model_dict.update(pretrained_dict)
         self.G.load_state_dict(model_dict)
 
-        print('======== LOAD PRETRAINED FACE ID MODEL {} ========='.format(opt_parser.load_a2l_G_name))
+        if DEBUG: print('======== LOAD PRETRAINED FACE ID MODEL {} ========='.format(opt_parser.load_a2l_G_name))
         self.G.to(device)
 
         ''' baseline model '''
@@ -71,7 +72,7 @@ class Audio2landmark_model():
         ckpt = torch.load(opt_parser.load_a2l_C_name)
         self.C.load_state_dict(ckpt['model_g_face_id'])
         # self.C.load_state_dict(ckpt['C'])
-        print('======== LOAD PRETRAINED FACE ID MODEL {} ========='.format(opt_parser.load_a2l_C_name))
+        if DEBUG: print('======== LOAD PRETRAINED FACE ID MODEL {} ========='.format(opt_parser.load_a2l_C_name))
         self.C.to(device)
 
         self.t_shape_idx = (27, 28, 29, 30, 33, 36, 39, 42, 45)
@@ -81,10 +82,10 @@ class Audio2landmark_model():
         with open(os.path.join('examples', 'dump', 'emb.pickle'), 'rb') as fp:
             self.test_embs = pickle.load(fp)
 
-        print('====================================')
+        if DEBUG: print('====================================')
         for key in self.test_embs.keys():
-            print(key)
-        print('====================================')
+            if DEBUG: print(key)
+        if DEBUG: print('====================================')
 
     def __train_face_and_pos__(self, fls, aus, embs, face_id, smooth_win=31, close_mouth_ratio=.99):
 
@@ -95,7 +96,8 @@ class Audio2landmark_model():
         face_id = face_id.requires_grad_(False)
         baseline_face_id = face_id.detach()
 
-        z = torch.tensor(torch.zeros(aus.shape[0], 128), requires_grad=False, dtype=torch.float).to(device)
+        z = torch.zeros(aus.shape[0], 128, dtype=torch.float).to(device)
+        # z = torch.tensor(torch.zeros(aus.shape[0], 128), requires_grad=False, dtype=torch.float)
         fl_dis_pred, _, spk_encode = self.G(aus, embs * 3.0, face_id, fls_without_traj, z, add_z_spk=False)
 
         # ADD CONTENT
@@ -261,9 +263,9 @@ class Audio2landmark_model():
                 idx = i
         return idx
 
-    def test(self, au_emb=None):
+    def test(self, au_emb=None, vis_fls=True):
         with torch.no_grad():
-            self.__train_pass__(au_emb, vis_fls=True)
+            self.__train_pass__(au_emb, vis_fls=vis_fls)
 
     def __solve_inverse_lip2__(self, fl_dis_pred_pos_numpy):
         for j in range(fl_dis_pred_pos_numpy.shape[0]):

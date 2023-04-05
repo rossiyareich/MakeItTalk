@@ -116,6 +116,8 @@ for ain in ains:
 if(os.path.isfile('examples/tmp.wav')):
     os.remove('examples/tmp.wav')
 
+print("Loaded audio...", file=sys.stderr)
+
 # landmark fake placeholder
 fl_data = []
 rot_tran, rot_quat, anchor_t_shape = [], [], []
@@ -144,16 +146,14 @@ with open(os.path.join('examples', 'dump', 'random_val_gaze.pickle'), 'wb') as f
     gaze = {'rot_trans':rot_tran, 'rot_quat':rot_quat, 'anchor_t_shape':anchor_t_shape}
     pickle.dump(gaze, fp)
 
-
-''' STEP 4: RUN audio->landmark network'''
 model = Audio2landmark_model(opt_parser, jpg_shape=shape_3d)
 if(len(opt_parser.reuse_train_emb_list) == 0):
     model.test(au_emb=au_emb)
 else:
     model.test(au_emb=None)
 
+print("Audio->Landmark...", file=sys.stderr)
 
-''' STEP 5: de-normalize the output to the original image scale '''
 fls = glob.glob1('examples', 'pred_fls_*.txt')
 fls.sort()
 
@@ -177,3 +177,6 @@ for i in range(0,len(fls)):
         model.single_test(jpg=img, fls=fl, filename=fls[i], prefix=opt_parser.jpg.split('.')[0])
         print('finish image2image gen')
     os.remove(os.path.join('examples', fls[i]))
+
+    print("{} / {}: Landmark->Face...".format(i+1, len(fls)), file=sys.stderr)
+print("Done!", file=sys.stderr)

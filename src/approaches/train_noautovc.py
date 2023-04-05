@@ -25,14 +25,16 @@ from scipy.signal import savgol_filter
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+DEBUG = False
+
 class Speaker_aware_branch():
 
     def __init__(self, opt_parser):
-        print('Run on device:', device)
+        if DEBUG: print('Run on device:', device)
 
         # Step 1 : load opt_parser
         for key in vars(opt_parser).keys():
-            print(key, ':', vars(opt_parser)[key])
+            if DEBUG: print(key, ':', vars(opt_parser)[key])
 
         self.opt_parser = opt_parser
         self.dump_dir = opt_parser.dump_dir
@@ -49,7 +51,7 @@ class Speaker_aware_branch():
                                                             shuffle=False, num_workers=0,
                                                             collate_fn=self.train_data.my_collate_in_segments_noemb)
 
-        print('Train num videos: {}'.format(len(self.train_data)))
+        if DEBUG: print('Train num videos: {}'.format(len(self.train_data)))
         self.eval_data = Audio2landmark_Dataset(dump_dir=self.dump_dir, dump_name=opt_parser.dump_file_name,
                                                num_window_frames=opt_parser.num_window_frames,
                                                num_window_step=opt_parser.num_window_step,
@@ -57,7 +59,7 @@ class Speaker_aware_branch():
         self.eval_dataloader = torch.utils.data.DataLoader(self.eval_data, batch_size=opt_parser.batch_size,
                                                            shuffle=False, num_workers=0,
                                                            collate_fn=self.eval_data.my_collate_in_segments_noemb)
-        print('EVAL num videos: {}'.format(len(self.eval_data)))
+        if DEBUG: print('EVAL num videos: {}'.format(len(self.eval_data)))
 
         # Step 3: Load model
         self.G = Audio2landmark_speaker_aware(
@@ -70,7 +72,7 @@ class Speaker_aware_branch():
         for p in self.G.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
-        print('G: Running on {}, total num params = {:.2f}M'.format(device, get_n_params(self.G)/1.0e6))
+        if DEBUG: print('G: Running on {}, total num params = {:.2f}M'.format(device, get_n_params(self.G)/1.0e6))
 
         # self.D_L = Audio2landmark_pos_DL()
         # self.D_L.apply(weight_init)
@@ -92,7 +94,7 @@ class Speaker_aware_branch():
             model_dict.update(pretrained_dict)
 
             self.G.load_state_dict(model_dict)
-            print('======== LOAD PRETRAINED SPEAKER AWARE MODEL {} ========='.format(opt_parser.load_a2l_G_name))
+            if DEBUG: print('======== LOAD PRETRAINED SPEAKER AWARE MODEL {} ========='.format(opt_parser.load_a2l_G_name))
         self.G.to(device)
 
         self.loss_mse = torch.nn.MSELoss()
@@ -262,23 +264,23 @@ class Speaker_aware_branch():
 
                 if (True):
                     if (self.opt_parser.show_animation):
-                        print('show animation ....')
+                        if DEBUG: print('show animation ....')
                         save_fls_av(fls_pred_pos_list, 'pred', ifsmooth=True)
                         save_fls_av(std_fls_list, 'std', ifsmooth=False)
 
             if (self.opt_parser.verbose <= 1):
-                print('{} Epoch: #{} batch #{}/{}'.format(status, epoch, i, len(dataloader)), end=': ')
+                if DEBUG: print('{} Epoch: #{} batch #{}/{}'.format(status, epoch, i, len(dataloader)), end=': ')
                 for key in log_loss.keys():
-                    print(key, '{:.5f}'.format(log_loss[key].per('batch')), end=', ')
-                print('')
+                    if DEBUG: print(key, '{:.5f}'.format(log_loss[key].per('batch')), end=', ')
+                if DEBUG: print('')
             self.__tensorboard_write__(status, log_loss, 'batch')
 
         if (self.opt_parser.verbose <= 2):
-            print('==========================================================')
-            print('{} Epoch: #{}'.format(status, epoch), end=':')
+            if DEBUG: print('==========================================================')
+            if DEBUG: print('{} Epoch: #{}'.format(status, epoch), end=':')
             for key in log_loss.keys():
-                print(key, '{:.4f}'.format(log_loss[key].per('epoch')), end=', ')
-            print('Epoch time usage: {:.2f} sec\n==========================================================\n'.format(time.time() - st_epoch))
+                if DEBUG: print(key, '{:.4f}'.format(log_loss[key].per('epoch')), end=', ')
+            if DEBUG: print('Epoch time usage: {:.2f} sec\n==========================================================\n'.format(time.time() - st_epoch))
         self.__save_model__(save_type='last_epoch', epoch=epoch)
         if(epoch % 5 == 0):
             self.__save_model__(save_type='e_{}'.format(epoch), epoch=epoch)
@@ -436,7 +438,7 @@ class Speaker_aware_branch():
         """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
         lr = self.opt_parser.lr * (0.3 ** (np.max((0, epoch + 0)) // 50))
         lr = np.max((lr, 1e-5))
-        print('###### ==== > Adjust learning rate to ', lr)
+        if DEBUG: print('###### ==== > Adjust learning rate to ', lr)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
             # print('lr:', param_group['lr'])

@@ -1,3 +1,8 @@
+torch 
+torchvision 
+torchaudio 
+--extra-index-url https://download.pytorch.org/whl/cu117
+
 ffmpeg-python
 opencv-python
 face_alignment

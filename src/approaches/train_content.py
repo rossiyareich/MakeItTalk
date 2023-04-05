@@ -20,7 +20,7 @@ from util.icp import icp
 import numpy as np
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+DEBUG = False
 
 class Audio2landmark_model():
 
@@ -28,7 +28,7 @@ class Audio2landmark_model():
         '''
         Init model with opt_parser
         '''
-        print('Run on device:', device)
+        if DEBUG: print('Run on device:', device)
 
         # Step 1 : load opt_parser
         self.opt_parser = opt_parser
@@ -46,7 +46,7 @@ class Audio2landmark_model():
         self.train_dataloader = torch.utils.data.DataLoader(self.train_data, batch_size=opt_parser.batch_size,
                                                            shuffle=False, num_workers=0,
                                                            collate_fn=self.train_data.my_collate_in_segments_noemb)
-        print('TRAIN num videos: {}'.format(len(self.train_data)))
+        if DEBUG: print('TRAIN num videos: {}'.format(len(self.train_data)))
 
         self.eval_data = Audio2landmark_Dataset(dump_dir=opt_parser.dump_dir,
                                                  dump_name='autovc_retrain_mel',
@@ -56,7 +56,7 @@ class Audio2landmark_model():
         self.eval_dataloader = torch.utils.data.DataLoader(self.eval_data, batch_size=opt_parser.batch_size,
                                                             shuffle=False, num_workers=0,
                                                             collate_fn=self.eval_data.my_collate_in_segments_noemb)
-        print('EVAL num videos: {}'.format(len(self.eval_data)))
+        if DEBUG: print('EVAL num videos: {}'.format(len(self.eval_data)))
 
         # Step 3: Load model
         self.C = Audio2landmark_content(num_window_frames=opt_parser.num_window_frames, hidden_size=opt_parser.hidden_size,
@@ -66,7 +66,7 @@ class Audio2landmark_model():
         if(opt_parser.load_a2l_C_name.split('/')[-1] != ''):
             ckpt = torch.load(opt_parser.load_a2l_C_name)
             self.C.load_state_dict(ckpt['model_g_face_id'])
-            print('======== LOAD PRETRAINED CONTENT BRANCH MODEL {} ========='.format(opt_parser.load_a2l_C_name))
+            if DEBUG: print('======== LOAD PRETRAINED CONTENT BRANCH MODEL {} ========='.format(opt_parser.load_a2l_C_name))
         self.C.to(device)
 
         self.t_shape_idx = (27, 28, 29, 30, 33, 36, 39, 42, 45)
@@ -155,7 +155,7 @@ class Audio2landmark_model():
             status = 'EVAL'
 
         random_clip_index = np.random.permutation(len(dataloader))[0:self.opt_parser.random_clip_num]
-        print('random visualize clip index', random_clip_index)
+        if DEBUG: print('random visualize clip index', random_clip_index)
 
         # Step 2: train for each batch
         for i, batch in enumerate(dataloader):
@@ -237,7 +237,7 @@ class Audio2landmark_model():
                                 postfix=postfix, root_dir=self.opt_parser.root_dir, ifsmooth=ifsmooth)
 
                     if (self.opt_parser.show_animation and not is_training):
-                        print('show animation ....')
+                        if DEBUG: print('show animation ....')
                         save_fls_av(fls_pred_pos_list, 'pred_{}'.format(i), ifsmooth=True)
                         save_fls_av(std_fls_list, 'std_{}'.format(i), ifsmooth=False)
                         from util.vis import Vis_comp
@@ -251,19 +251,19 @@ class Audio2landmark_model():
                     self.__save_model__(save_type='last_inbatch', epoch=epoch)
 
                 if (self.opt_parser.verbose <= 1):
-                    print('{} Epoch: #{} batch #{}/{} inbatch #{}/{}'.format(
+                    if DEBUG: print('{} Epoch: #{} batch #{}/{} inbatch #{}/{}'.format(
                         status, epoch, i, len(dataloader),
                     in_batch, self.opt_parser.in_batch_nepoch), end=': ')
                     for key in log_loss.keys():
                         print(key, '{:.5f}'.format(log_loss[key].per('batch')), end=', ')
-                    print('')
+                    if DEBUG: print('')
 
         if (self.opt_parser.verbose <= 2):
-            print('==========================================================')
-            print('{} Epoch: #{}'.format(status, epoch), end=':')
+            if DEBUG: print('==========================================================')
+            if DEBUG: print('{} Epoch: #{}'.format(status, epoch), end=':')
             for key in log_loss.keys():
                 print(key, '{:.4f}'.format(log_loss[key].per('epoch')), end=', ')
-            print(
+            if DEBUG: print(
                 'Epoch time usage: {:.2f} sec\n==========================================================\n'.format(
                     time.time() - st_epoch))
         self.__save_model__(save_type='last_epoch', epoch=epoch)

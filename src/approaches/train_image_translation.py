@@ -26,10 +26,12 @@ import face_alignment
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+DEBUG = False
+
 class Image_translation_block():
 
     def __init__(self, opt_parser, single_test=False):
-        print('Run on device {}'.format(device))
+        if DEBUG: print('Run on device {}'.format(device))
 
         # for key in vars(opt_parser).keys():
         #     print(key, ':', vars(opt_parser)[key])
@@ -52,7 +54,7 @@ class Image_translation_block():
                 del tmp
 
         if torch.cuda.device_count() > 1:
-            print("Let's use", torch.cuda.device_count(), "GPUs in G mode!")
+            if DEBUG: print("Let's use", torch.cuda.device_count(), "GPUs in G mode!")
             self.G = nn.DataParallel(self.G)
 
         self.G.to(device)
@@ -83,7 +85,7 @@ class Image_translation_block():
             self.criterionL1 = nn.L1Loss()
             self.criterionVGG = VGGLoss()
             if torch.cuda.device_count() > 1:
-                print("Let's use", torch.cuda.device_count(), "GPUs in VGG model!")
+                if DEBUG: print("Let's use", torch.cuda.device_count(), "GPUs in VGG model!")
                 self.criterionVGG = nn.DataParallel(self.criterionVGG)
             self.criterionVGG.to(device)
 
@@ -117,9 +119,9 @@ class Image_translation_block():
                                       if k in model_weights}
                 model_weights.update(pretrained_weights)
                 model_ft.load_state_dict(model_weights)
-            print('Load AWing model sucessfully')
+            if DEBUG: print('Load AWing model sucessfully')
             if torch.cuda.device_count() > 1:
-                print("Let's use", torch.cuda.device_count(), "GPUs for AWing!")
+                if DEBUG: print("Let's use", torch.cuda.device_count(), "GPUs for AWing!")
                 self.fa_model = nn.DataParallel(model_ft).to(self.device).eval()
             else:
                 self.fa_model = model_ft.to(self.device).eval()
@@ -236,7 +238,7 @@ class Image_translation_block():
             if (i % self.opt_parser.ckpt_last_freq == 0):
                 self.__save_model__('last', epoch)
 
-            print("Epoch {}, Batch {}/{}, loss {:.4f}, l1 {:.4f}, vggloss {:.4f}, styleloss {:.4f} time {:.4f}".format(
+            if DEBUG: print("Epoch {}, Batch {}/{}, loss {:.4f}, l1 {:.4f}, vggloss {:.4f}, styleloss {:.4f} time {:.4f}".format(
                 epoch, i, len(self.dataset) // self.opt_parser.batch_size,
                 loss.cpu().detach().numpy(),
                 loss_l1.cpu().detach().numpy(),
@@ -251,7 +253,7 @@ class Image_translation_block():
                 if(i >= 100):
                     break
 
-        print('Epoch time usage:', time.time() - st_epoch, 'I/O time usage:', time.time() - st_epoch - g_time, '\n=========================')
+        if DEBUG: print('Epoch time usage:', time.time() - st_epoch, 'I/O time usage:', time.time() - st_epoch - g_time, '\n=========================')
         if(self.opt_parser.test_speed):
             exit(0)
         if(epoch % self.opt_parser.ckpt_epoch_freq == 0):
@@ -291,7 +293,7 @@ class Image_translation_block():
 
         self.G.eval()
         for i, batch in enumerate(self.dataloader):
-            print(i, 50)
+            if DEBUG: print(i, 50)
             if (i > 50):
                 break
 
@@ -367,9 +369,7 @@ class Image_translation_block():
             os.system('rm tmp_{:04d}.mp4'.format(i))
 
 
-    def single_test(self, jpg=None, fls=None, filename=None, prefix='', grey_only=False):
-        import time
-        st = time.time()
+    def single_test(self, jpg=None, fls=None, out_file='out.mp4'):
         self.G.eval()
 
         if(jpg is None):
@@ -383,57 +383,21 @@ class Image_translation_block():
             fls[:, 0::3] += 130
             fls[:, 1::3] += 80
 
-        writer = cv2.VideoWriter('out.mp4', cv2.VideoWriter_fourcc(*'mjpg'), 62.5, (256 * 3, 256))
+        import time
+        st = time.time()
 
+        writer = cv2.VideoWriter(out_file, cv2.VideoWriter_fourcc(*'mp4v'), 61.78, (256, 256))
         for i, frame in enumerate(fls):
-
             img_fl = np.ones(shape=(256, 256, 3)) * 255
             fl = frame.astype(int)
             img_fl = vis_landmark_on_img(img_fl, np.reshape(fl, (68, 3)))
-            frame = np.concatenate((img_fl, jpg), axis=2).astype(np.float32)/255.0
+            frame = np.concatenate((img_fl, jpg), axis=2).astype(np.float32)
 
-            image_in, image_out = frame.transpose((2, 0, 1)), np.zeros(shape=(3, 256, 256))
-            # image_in, image_out = frame.transpose((2, 1, 0)), np.zeros(shape=(3, 256, 256))
-            image_in, image_out = torch.tensor(image_in, requires_grad=False), \
-                                  torch.tensor(image_out, requires_grad=False)
+            image_in = torch.from_numpy(frame).cuda(device).div(255).permute((2, 0, 1)).reshape((-1, 6, 256, 256))
+            g_out = self.G(image_in).tanh().permute((0, 2, 3, 1)).clamp_min(0).mul(255).detach().cpu().numpy()
 
-            image_in, image_out = image_in.reshape(-1, 6, 256, 256), image_out.reshape(-1, 3, 256, 256)
-            image_in, image_out = image_in.to(device), image_out.to(device)
-
-            g_out = self.G(image_in)
-            g_out = torch.tanh(g_out)
-
-            g_out = g_out.cpu().detach().numpy().transpose((0, 2, 3, 1))
-            g_out[g_out < 0] = 0
-            ref_in = image_in[:, 3:6, :, :].cpu().detach().numpy().transpose((0, 2, 3, 1))
-            fls_in = image_in[:, 0:3, :, :].cpu().detach().numpy().transpose((0, 2, 3, 1))
-            # g_out = g_out.cpu().detach().numpy().transpose((0, 3, 2, 1))
-            # g_out[g_out < 0] = 0
-            # ref_in = image_in[:, 3:6, :, :].cpu().detach().numpy().transpose((0, 3, 2, 1))
-            # fls_in = image_in[:, 0:3, :, :].cpu().detach().numpy().transpose((0, 3, 2, 1))
-
-            if(grey_only):
-                g_out_grey =np.mean(g_out, axis=3, keepdims=True)
-                g_out[:, :, :, 0:1] = g_out[:, :, :, 1:2] = g_out[:, :, :, 2:3] = g_out_grey
-
-
-            for i in range(g_out.shape[0]):
-                frame = np.concatenate((ref_in[i], g_out[i], fls_in[i]), axis=1) * 255.0
-                writer.write(frame.astype(np.uint8))
-
+            for j in range(g_out.shape[0]):
+                writer.write(g_out[j].astype(np.uint8))
         writer.release()
-        print('Time - only video:', time.time() - st)
 
-        if(filename is None):
-            filename = 'v'
-        os.system('ffmpeg -loglevel error -y -i out.mp4 -i {} -pix_fmt yuv420p -strict -2 examples/{}_{}.mp4'.format(
-            'examples/'+filename[9:-16]+'.wav',
-            prefix, filename[:-4]))
-        # os.system('rm out.mp4')
-
-        print('Time - ffmpeg add audio:', time.time() - st)
-
-
-
-
-
+        print('Time - video:', time.time() - st)
