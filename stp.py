@@ -4,6 +4,9 @@ import os
 import pickle
 import sys
 
+sys.path.append('MakeItTalk')
+sys.path.append('MakeItTalk/thirdparty/AdaptiveWingLoss')
+
 import cv2
 import face_alignment
 import numpy as np
@@ -15,8 +18,6 @@ from src.approaches.train_image_translation import Image_translation_block
 from src.autovc.AutoVC_mel_Convertor_retrain_version import \
     AutoVC_mel_Convertor
 
-sys.path.append('MakeItTalk')
-sys.path.append('MakeItTalk/thirdparty/AdaptiveWingLoss')
 
 DEBUG = False
 
