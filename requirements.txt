@@ -15,4 +15,4 @@ soundfile
 librosa==0.8.1
 pysptk
 pyworld
-resemblyzer
+resemblyzer==0.1.1.dev0
