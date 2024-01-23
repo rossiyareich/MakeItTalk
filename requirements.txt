@@ -1,10 +1,5 @@
-torch 
-torchvision 
-torchaudio 
---extra-index-url https://download.pytorch.org/whl/cu118
 matplotlib
 tensorboardX
-
 ffmpeg-python
 opencv-python
 face_alignment
